@@ -1,45 +1,41 @@
+from typing import Any
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import QuerySet
-from django.core.exceptions import ValidationError
 
 from db.models import Order, Ticket, MovieSession
 
 
-@transaction.atomic
 def create_order(
-        tickets: list[dict],
+        tickets: list[dict[str, Any]],
         username: str,
         date: str = None
 ) -> Order:
-    user = get_user_model().objects.get(username=username)
-    order = Order.objects.create(user=user)
-
-    if date is not None:
-        order.created_at = date
-    order.save()
-
-    for ticket in tickets:
-        movie_session_instance = MovieSession.objects.get(
-            id=ticket["movie_session"]
+    with transaction.atomic():
+        order = Order.objects.create(
+            user=get_user_model().objects.get(username=username)
         )
+        if date:
+            order.created_at = date
 
-        try:
+        for ticket in tickets:
+            movie_session = MovieSession.objects.get(
+                id=ticket["movie_session"]
+            )
+            row = ticket["row"]
+            seat = ticket["seat"]
             Ticket.objects.create(
                 order=order,
-                movie_session=movie_session_instance,
-                row=ticket["row"],
-                seat=ticket["seat"]
+                movie_session=movie_session,
+                row=row,
+                seat=seat
             )
-        except ValidationError as e:
-            raise e
-
+        order.save()
     return order
 
 
-@transaction.atomic
 def get_orders(username: str = None) -> QuerySet[Order]:
-    orders = Order.objects.all()
-    if username is not None:
-        return orders.filter(user__username=username)
-    return orders
+    if username:
+        return Order.objects.filter(user=get_user_model().objects.get(username=username)) # noqa
+    return Order.objects.all().order_by("-created_at")
