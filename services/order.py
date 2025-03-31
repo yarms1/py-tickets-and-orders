@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import QuerySet
+from django.core.exceptions import ValidationError
 
 from db.models import Order, Ticket, MovieSession
 
@@ -19,15 +20,18 @@ def create_order(
     order.save()
 
     for ticket in tickets:
-        movie_session_instance = MovieSession.objects.get(
-            id=ticket["movie_session"]
-        )
-        Ticket.objects.create(
-            order=order,
-            movie_session=movie_session_instance,
-            row=ticket["row"],
-            seat=ticket["seat"]
-        )
+        movie_session_instance = MovieSession.objects.get(id=ticket["movie_session"])
+
+        try:
+            Ticket.objects.create(
+                order=order,
+                movie_session=movie_session_instance,
+                row=ticket["row"],
+                seat=ticket["seat"]
+            )
+        except ValidationError as e:
+            raise e
+
     return order
 
 
