@@ -36,4 +36,4 @@ def get_orders(username: str = None) -> QuerySet[Order]:
     orders = Order.objects.all()
     if username is not None:
         return orders.filter(user__username=username)
-    return Order.objects.all()
+    return orders
