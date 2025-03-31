@@ -1,41 +1,45 @@
-from typing import Any
-
+from typing import Optional
+from datetime import datetime
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import QuerySet
+from db.models import Order, Ticket
+from services.movie_session import get_movie_session_by_id
 
-from db.models import Order, Ticket, MovieSession
+
+def create_ticket(ticket_data: dict, order: Order) -> Ticket:
+    ticket = Ticket(
+        row=ticket_data.get("row"),
+        seat=ticket_data.get("seat"),
+        movie_session=get_movie_session_by_id(
+            ticket_data.get("movie_session")
+        ),
+        order=order,
+    )
+    ticket.full_clean()
+    ticket.save()
+    return ticket
 
 
 def create_order(
-        tickets: list[dict[str, Any]],
+        tickets: list[dict],
         username: str,
-        date: str = None
-) -> Order:
+        date: Optional[datetime] = None
+) -> None:
     with transaction.atomic():
-        order = Order.objects.create(
-            user=get_user_model().objects.get(username=username)
-        )
+        user = get_user_model().objects.get(username=username)
+        order = Order.objects.create(user=user)
+
         if date:
             order.created_at = date
+            order.save()
 
-        for ticket in tickets:
-            movie_session = MovieSession.objects.get(
-                id=ticket["movie_session"]
-            )
-            row = ticket["row"]
-            seat = ticket["seat"]
-            Ticket.objects.create(
-                order=order,
-                movie_session=movie_session,
-                row=row,
-                seat=seat
-            )
-        order.save()
-    return order
+        for ticket_data in tickets:
+            create_ticket(ticket_data, order)
 
 
-def get_orders(username: str = None) -> QuerySet[Order]:
+def get_orders(username: Optional[str] = None) -> QuerySet[Order]:
+    orders = Order.objects.all()
     if username:
-        return Order.objects.filter(user=get_user_model().objects.get(username=username)) # noqa
-    return Order.objects.all().order_by("-created_at")
+        orders = orders.filter(user__username=username)
+    return orders
